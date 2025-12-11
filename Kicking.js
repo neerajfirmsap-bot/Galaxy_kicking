@@ -11,19 +11,23 @@ uiContainer.style.padding = '10px';
 uiContainer.style.borderRadius = '5px';
 uiContainer.style.width = '150px';
 uiContainer.style.cursor = 'move';
-uiContainer.style.touchAction = "none";   // IMPORTANT FOR ANDROID TOUCH
+uiContainer.style.userSelect = 'none'; // Only on container
+uiContainer.style.touchAction = 'none';
 
-// Button
+// Create button AFTER container styling
 const runButton = document.createElement('button');
 runButton.textContent = 'Run Imprison Script';
 runButton.style.cursor = 'pointer';
 runButton.style.width = '100%';
+// NO user-select: none on button - allows clicks/taps
+// NO touch-action: none on button
 
 uiContainer.appendChild(runButton);
 document.body.appendChild(uiContainer);
 
-// Imprison function
+// Function to perform imprison actions
 function runImprisonActions() {
+    console.log('Button clicked!'); // Debug log
     const userButtons = document.querySelectorAll('.planet-bar__button__action');
     if (userButtons.length > 0) userButtons[0].click();
 
@@ -33,61 +37,72 @@ function runImprisonActions() {
     document.querySelectorAll('.mdc-list-item__text').forEach(action => {
         if (action.innerText === 'Exit') action.click();
     });
-
     setTimeout(() => {
         const startUsers = document.querySelectorAll('.start__user');
         if (startUsers.length > 0) startUsers[0].click();
     }, 500);
 }
 
+// Add button listener FIRST (before drag listeners)
 runButton.addEventListener('click', runImprisonActions);
 
-// ------------------------
-// DRAGGING (MOUSE + TOUCH)
-// ------------------------
+// Dragging logic - more selective to avoid button interference
 let offsetX = 0, offsetY = 0, isDragging = false;
 
-// Start drag (mouse)
-uiContainer.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    offsetX = e.clientX - uiContainer.getBoundingClientRect().left;
-    offsetY = e.clientY - uiContainer.getBoundingClientRect().top;
+function startDrag(clientX, clientY) {
+    const rect = uiContainer.getBoundingClientRect();
+    offsetX = clientX - rect.left;
+    offsetY = clientY - rect.top;
     isDragging = true;
-});
+    uiContainer.style.transition = 'none';
+}
 
-// Start drag (touch)
-uiContainer.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    offsetX = touch.clientX - uiContainer.getBoundingClientRect().left;
-    offsetY = touch.clientY - uiContainer.getBoundingClientRect().top;
-    isDragging = true;
-});
-
-// Moving (mouse)
-document.addEventListener('mousemove', (e) => {
+function performDrag(clientX, clientY) {
     if (!isDragging) return;
-    e.preventDefault();
-    moveUI(e.clientX, e.clientY);
-});
-
-// Moving (touch)
-document.addEventListener('touchmove', (e) => {
-    if (!isDragging) return;
-    const touch = e.touches[0];
-    moveUI(touch.clientX, touch.clientY);
-});
-
-// Stop drag
-document.addEventListener('mouseup', () => isDragging = false);
-document.addEventListener('touchend', () => isDragging = false);
-
-// Helper for clamped movement
-function moveUI(x, y) {
-    let newLeft = x - offsetX;
-    let newTop = y - offsetY;
+    let newLeft = clientX - offsetX;
+    let newTop = clientY - offsetY;
     newLeft = Math.max(0, Math.min(window.innerWidth - uiContainer.offsetWidth, newLeft));
     newTop = Math.max(0, Math.min(window.innerHeight - uiContainer.offsetHeight, newTop));
     uiContainer.style.left = newLeft + 'px';
     uiContainer.style.top = newTop + 'px';
 }
+
+function stopDrag() {
+    isDragging = false;
+    uiContainer.style.transition = 'all 0.2s ease';
+}
+
+// Mouse - only on container (not button)
+uiContainer.addEventListener('mousedown', (e) => {
+    // Don't drag if clicking button
+    if (e.target === runButton) return;
+    e.preventDefault();
+    startDrag(e.clientX, e.clientY);
+});
+
+document.addEventListener('mousemove', (e) => {
+    performDrag(e.clientX, e.clientY);
+});
+
+document.addEventListener('mouseup', stopDrag);
+
+// Touch - only on container (not button), more conservative preventDefault
+uiContainer.addEventListener('touchstart', (e) => {
+    // Don't drag if touching button
+    if (e.target === runButton) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    e.preventDefault();
+    startDrag(touch.clientX, touch.clientY);
+}, { passive: false });
+
+document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    e.preventDefault();
+    performDrag(touch.clientX, touch.clientY);
+}, { passive: false });
+
+document.addEventListener('touchend', stopDrag);
+document.addEventListener('touchcancel', stopDrag);
